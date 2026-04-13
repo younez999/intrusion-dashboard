@@ -22,10 +22,6 @@ public class EventStoreService {
         return acknowledged;
     }
 
-    public synchronized void markChecked() {
-        this.acknowledged = true;
-    }
-
     public synchronized void clear() {
         this.latestPayload = null;
         this.acknowledged = true;

@@ -23,12 +23,28 @@
         </div>
 
         <div class="panel">
+            <h2>Data Source</h2>
+
+            <div class="data-source-box">
+                <label class="switch-row">
+                    <span>Mock</span>
+                    <label class="switch">
+                        <input type="checkbox" id="dataModeSwitch">
+                        <span class="slider"></span>
+                    </label>
+                    <span>Live API</span>
+                </label>
+
+                <div class="source-status">
+                    Current source:
+                    <span id="modeValue" class="value badge neutral">Mock UI</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
             <h2>System Status</h2>
             <div class="status-grid">
-                <div class="status-item">
-                    <span class="label">Mode</span>
-                    <span id="modeValue" class="value">Mock UI</span>
-                </div>
                 <div class="status-item">
                     <span class="label">Snapshot</span>
                     <span id="snapshotValue" class="value">-</span>
@@ -40,6 +56,10 @@
                 <div class="status-item">
                     <span class="label">Threat</span>
                     <span id="threatValue" class="value badge neutral">No Data</span>
+                </div>
+                <div class="status-item">
+                    <span class="label">Events</span>
+                    <span id="eventsCountValue" class="value">0</span>
                 </div>
             </div>
         </div>
@@ -75,7 +95,8 @@
 
         <div class="panel controls-panel">
             <button id="checkedBtn" class="checked-btn">Checked</button>
-            <button id="reloadMockBtn" class="secondary-btn">Reload Mock Data</button>
+            <button id="reloadBtn" class="secondary-btn">Reload Current Source</button>
+            <button id="openPerimeterToolBtn" class="secondary-btn">Open Perimeter Tool</button>
         </div>
     </aside>
 

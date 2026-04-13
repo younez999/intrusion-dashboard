@@ -1,26 +1,26 @@
 const CHANNEL_COUNT = 1600;
 const POLL_INTERVAL_MS = 4000;
 
-// NJUPT Xianlin Campus approximate center
+// Set to your campus center
 const MAP_CENTER = [32.11534, 118.92501];
 
-// Approximate demo perimeter around campus.
-// Replace this later with exact campus GeoJSON / exact perimeter coordinates.
+// Replace later with your true perimeter export
 const DEMO_PERIMETER = [
-    [32.119864, 118.919406],
-    [32.123901, 118.927817],
-    [32.119784, 118.930360],
-    [32.118156, 118.930596],
-    [32.116375, 118.930183],
-    [32.113528, 118.929266],
-    [32.111879, 118.929260],
-    [32.111017, 118.929545],
-    [32.110190, 118.930027],
-    [32.109208, 118.930639],
-    [32.106821, 118.922984],
-    [32.112828, 118.923161],
-    [32.114137, 118.922775],
-    [32.116765, 118.921219],
+    [32.119846, 118.919390],
+    [32.122692, 118.925006],
+    [32.123865, 118.927850],
+    [32.119855, 118.930328],
+    [32.119433, 118.930521],
+    [32.118274, 118.930650],
+    [32.117306, 118.930467],
+    [32.113418, 118.929255],
+    [32.112470, 118.929239],
+    [32.111438, 118.929416],
+    [32.110379, 118.929958],
+    [32.109197, 118.930671],
+    [32.106788, 118.922989],
+    [32.112825, 118.923166],
+    [32.114057, 118.922812],
 ];
 
 const MOCK_PAYLOAD = {
@@ -82,12 +82,13 @@ const MOCK_PAYLOAD = {
 };
 
 let map;
-let perimeterPolyline;
+let perimeterPolygon;
 let zoneMarkers = [];
 let activeThreatLayers = [];
 let perimeterChannelPoints = [];
-let useBackend = true;
 let currentPayload = null;
+let useBackend = false;
+let pollTimer = null;
 
 function getColorByClass(eventClass) {
     if (eventClass === "fence") return "#ef4444";
@@ -104,39 +105,16 @@ function initMap() {
         attribution: "&copy; OpenStreetMap contributors"
     }).addTo(map);
 
-    perimeterPolyline = L.polygon(DEMO_PERIMETER, {
+    perimeterPolygon = L.polygon(DEMO_PERIMETER, {
         color: "#60a5fa",
         weight: 3,
-        fillOpacity: 0.05
+        fillOpacity: 0.04
     }).addTo(map);
 
-    map.fitBounds(perimeterPolyline.getBounds(), { padding: [30, 30] });
+    map.fitBounds(perimeterPolygon.getBounds(), { padding: [30, 30] });
 
     perimeterChannelPoints = interpolatePerimeter(DEMO_PERIMETER, CHANNEL_COUNT);
     addZoneLabels();
-}
-
-function addZoneLabels() {
-    zoneMarkers.forEach(marker => map.removeLayer(marker));
-    zoneMarkers = [];
-
-    const zoneIndexes = [
-        { name: "North", idx: 0 },
-        { name: "East", idx: Math.floor(CHANNEL_COUNT * 0.25) },
-        { name: "South", idx: Math.floor(CHANNEL_COUNT * 0.50) },
-        { name: "West", idx: Math.floor(CHANNEL_COUNT * 0.75) }
-    ];
-
-    zoneIndexes.forEach(zone => {
-        const point = perimeterChannelPoints[zone.idx];
-        const marker = L.marker(point, {
-            icon: L.divIcon({
-                className: "zone-label",
-                html: zone.name
-            })
-        }).addTo(map);
-        zoneMarkers.push(marker);
-    });
 }
 
 function interpolatePerimeter(latlngs, pointCount) {
@@ -179,9 +157,53 @@ function interpolatePerimeter(latlngs, pointCount) {
     return result;
 }
 
+function addZoneLabels() {
+    zoneMarkers.forEach(marker => map.removeLayer(marker));
+    zoneMarkers = [];
+
+    const zoneIndexes = [
+        { name: "North", idx: 0 },
+        { name: "East", idx: Math.floor(CHANNEL_COUNT * 0.25) },
+        { name: "South", idx: Math.floor(CHANNEL_COUNT * 0.50) },
+        { name: "West", idx: Math.floor(CHANNEL_COUNT * 0.75) }
+    ];
+
+    zoneIndexes.forEach(zone => {
+        const point = perimeterChannelPoints[zone.idx];
+        const marker = L.marker(point, {
+            icon: L.divIcon({
+                className: "zone-label",
+                html: zone.name
+            })
+        }).addTo(map);
+        zoneMarkers.push(marker);
+    });
+}
+
 function clearThreatLayers() {
     activeThreatLayers.forEach(layer => map.removeLayer(layer));
     activeThreatLayers = [];
+}
+
+function buildChannelSegment(start, end) {
+    const safeStart = Math.max(0, Math.min(CHANNEL_COUNT - 1, start));
+    const safeEnd = Math.max(0, Math.min(CHANNEL_COUNT - 1, end));
+    const points = [];
+
+    if (safeStart <= safeEnd) {
+        for (let i = safeStart; i <= safeEnd; i++) {
+            points.push(perimeterChannelPoints[i]);
+        }
+    } else {
+        for (let i = safeStart; i < CHANNEL_COUNT; i++) {
+            points.push(perimeterChannelPoints[i]);
+        }
+        for (let i = 0; i <= safeEnd; i++) {
+            points.push(perimeterChannelPoints[i]);
+        }
+    }
+
+    return points;
 }
 
 function drawThreatSegments(events) {
@@ -210,51 +232,50 @@ function drawThreatSegments(events) {
     });
 }
 
-function buildChannelSegment(start, end) {
-    const safeStart = Math.max(0, Math.min(CHANNEL_COUNT - 1, start));
-    const safeEnd = Math.max(0, Math.min(CHANNEL_COUNT - 1, end));
-    const points = [];
+function setModeBadge() {
+    const modeValue = document.getElementById("modeValue");
 
-    if (safeStart <= safeEnd) {
-        for (let i = safeStart; i <= safeEnd; i++) {
-            points.push(perimeterChannelPoints[i]);
-        }
+    if (useBackend) {
+        modeValue.textContent = "Live API";
+        modeValue.className = "value badge live";
     } else {
-        for (let i = safeStart; i < CHANNEL_COUNT; i++) {
-            points.push(perimeterChannelPoints[i]);
-        }
-        for (let i = 0; i <= safeEnd; i++) {
-            points.push(perimeterChannelPoints[i]);
-        }
+        modeValue.textContent = "Mock UI";
+        modeValue.className = "value badge mock";
     }
+}
 
-    return points;
+function clearSidebarData() {
+    document.getElementById("snapshotValue").textContent = "-";
+    document.getElementById("timestampValue").textContent = "-";
+    document.getElementById("eventsCountValue").textContent = "0";
+
+    const threatValue = document.getElementById("threatValue");
+    threatValue.textContent = "No Data";
+    threatValue.className = "value badge neutral";
+
+    document.getElementById("eventsContainer").innerHTML =
+        `<div class="empty-state">No active events.</div>`;
+
+    clearThreatLayers();
 }
 
 function updateSidebar(payloadWrapper) {
-    const snapshotValue = document.getElementById("snapshotValue");
-    const timestampValue = document.getElementById("timestampValue");
-    const threatValue = document.getElementById("threatValue");
-    const eventsContainer = document.getElementById("eventsContainer");
-    const modeValue = document.getElementById("modeValue");
-
-    modeValue.textContent = useBackend ? "Live API" : "Mock UI";
+    setModeBadge();
 
     if (!payloadWrapper || payloadWrapper.status !== "ok" || !payloadWrapper.data) {
-        snapshotValue.textContent = "-";
-        timestampValue.textContent = "-";
-        threatValue.textContent = "No Data";
-        threatValue.className = "value badge neutral";
-        eventsContainer.innerHTML = `<div class="empty-state">No active events.</div>`;
-        clearThreatLayers();
+        clearSidebarData();
         return;
     }
 
     const payload = payloadWrapper.data;
-    snapshotValue.textContent = payload.snapshot_idx;
-    timestampValue.textContent = payload.timestamp;
+    const threatEvents = (payload.events || []).filter(e => e.is_threat);
 
-    if (payload.has_threat) {
+    document.getElementById("snapshotValue").textContent = payload.snapshot_idx ?? "-";
+    document.getElementById("timestampValue").textContent = payload.timestamp ?? "-";
+    document.getElementById("eventsCountValue").textContent = String(threatEvents.length);
+
+    const threatValue = document.getElementById("threatValue");
+    if (payload.has_threat && threatEvents.length > 0) {
         threatValue.textContent = "Threat Active";
         threatValue.className = "value badge danger";
     } else {
@@ -262,78 +283,111 @@ function updateSidebar(payloadWrapper) {
         threatValue.className = "value badge safe";
     }
 
-    const events = (payload.events || []).filter(e => e.is_threat);
-
-    if (!events.length) {
+    const eventsContainer = document.getElementById("eventsContainer");
+    if (!threatEvents.length) {
         eventsContainer.innerHTML = `<div class="empty-state">No active threat events.</div>`;
     } else {
-        eventsContainer.innerHTML = events.map(event => `
+        eventsContainer.innerHTML = threatEvents.map(event => `
       <div class="event-card ${event.class}">
         <div class="event-title">${event.class.toUpperCase()} · Event ${event.event_id}</div>
         <div class="event-meta">
           Channel range: ${event.channel_start} - ${event.channel_end}<br/>
           Width: ${event.channel_width}<br/>
           Confidence: ${(event.confidence * 100).toFixed(1)}%<br/>
-          Threat: ${event.is_threat ? "Yes" : "No"}
+          Class index: ${event.class_idx}
         </div>
       </div>
     `).join("");
     }
 
-    drawThreatSegments(events);
+    drawThreatSegments(threatEvents);
 }
 
-async function fetchLatestData() {
-    if (!useBackend) {
-        currentPayload = MOCK_PAYLOAD;
-        updateSidebar(currentPayload);
-        return;
-    }
+async function fetchMockData() {
+    currentPayload = structuredClone(MOCK_PAYLOAD);
+    updateSidebar(currentPayload);
+}
 
+async function fetchLiveData() {
     try {
         const response = await fetch("/api/events/latest");
         const data = await response.json();
         currentPayload = data;
         updateSidebar(data);
     } catch (error) {
-        console.error("Failed to load latest data:", error);
+        console.error("Failed to load live data:", error);
+        clearSidebarData();
+    }
+}
+
+async function fetchCurrentSource() {
+    if (useBackend) {
+        await fetchLiveData();
+    } else {
+        await fetchMockData();
     }
 }
 
 async function markChecked() {
-    if (!useBackend) {
+    if (useBackend) {
+        try {
+            await fetch("/api/events/checked", { method: "POST" });
+            currentPayload = null;
+            clearSidebarData();
+        } catch (error) {
+            console.error("Failed to clear live events:", error);
+        }
+    } else {
         currentPayload = null;
-        updateSidebar(null);
-        return;
+        clearSidebarData();
     }
+}
 
-    try {
-        await fetch("/api/events/checked", {
-            method: "POST"
-        });
-        currentPayload = null;
-        updateSidebar(null);
-    } catch (error) {
-        console.error("Failed to clear events:", error);
+function startPolling() {
+    stopPolling();
+
+    pollTimer = setInterval(async () => {
+        if (useBackend) {
+            await fetchLiveData();
+        }
+    }, POLL_INTERVAL_MS);
+}
+
+function stopPolling() {
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
     }
+}
+
+function handleModeSwitch() {
+    const switchEl = document.getElementById("dataModeSwitch");
+    useBackend = switchEl.checked;
+
+    setModeBadge();
+    clearSidebarData();
+    fetchCurrentSource();
+    startPolling();
 }
 
 function wireButtons() {
     document.getElementById("checkedBtn").addEventListener("click", markChecked);
 
-    document.getElementById("reloadMockBtn").addEventListener("click", () => {
-        useBackend = false;
-        fetchLatestData();
+    document.getElementById("reloadBtn").addEventListener("click", () => {
+        fetchCurrentSource();
     });
+
+    document.getElementById("openPerimeterToolBtn").addEventListener("click", () => {
+        window.open("/perimeter-tool.html", "_blank");
+    });
+
+    document.getElementById("dataModeSwitch").addEventListener("change", handleModeSwitch);
 }
 
-function startPolling() {
-    fetchLatestData();
-    setInterval(fetchLatestData, POLL_INTERVAL_MS);
-}
-
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", async () => {
     initMap();
     wireButtons();
+    setModeBadge();
+    await fetchCurrentSource();
     startPolling();
 });
