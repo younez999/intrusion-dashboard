@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Perimeter Drawing Tool</title>
+
+    <link rel="stylesheet"
+          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+    <link rel="stylesheet"
+          href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
+
+    <style>
+        body { margin: 0; font-family: Arial; }
+        #map { height: 90vh; }
+
+        .controls {
+            padding: 10px;
+            background: #111827;
+            color: white;
+        }
+
+        button {
+            margin-right: 10px;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        #output {
+            width: 100%;
+            height: 150px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="controls">
+    <button onclick="exportPolygon()">Export Perimeter</button>
+    <button onclick="clearAll()">Clear</button>
+    <span>Click to draw polygon → drag points to adjust</span>
+</div>
+
+<div id="map"></div>
+
+<textarea id="output" placeholder="Coordinates will appear here..."></textarea>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+
+<script>
+    // NJUPT center
+    const map = L.map('map').setView([32.11534, 118.92501], 16);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+
+    let drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+
+    const drawControl = new L.Control.Draw({
+        draw: {
+            polyline: false,
+            rectangle: false,
+            circle: false,
+            marker: false,
+            circlemarker: false,
+            polygon: {
+                allowIntersection: false,
+                showArea: true
+            }
+        },
+        edit: {
+            featureGroup: drawnItems
+        }
+    });
+
+    map.addControl(drawControl);
+
+    let currentLayer = null;
+
+    map.on(L.Draw.Event.CREATED, function (event) {
+        if (currentLayer) {
+            drawnItems.removeLayer(currentLayer);
+        }
+        currentLayer = event.layer;
+        drawnItems.addLayer(currentLayer);
+    });
+
+    function exportPolygon() {
+        if (!currentLayer) {
+            alert("Draw a polygon first!");
+            return;
+        }
+
+        const latlngs = currentLayer.getLatLngs()[0];
+
+        let formatted = "const DEMO_PERIMETER = [\n";
+
+        latlngs.forEach(pt => {
+            formatted += `  [${pt.lat.toFixed(6)}, ${pt.lng.toFixed(6)}],\n`;
+        });
+
+        formatted += "];";
+
+        document.getElementById("output").value = formatted;
+    }
+
+    function clearAll() {
+        drawnItems.clearLayers();
+        currentLayer = null;
+        document.getElementById("output").value = "";
+    }
+</script>
+
+</body>
+</html>
