@@ -20,99 +20,110 @@
 </div>
 
 <div class="app-shell">
-    <aside class="sidebar">
-        <div class="panel brand-panel">
-            <h1>Intrusion Detection</h1>
-            <p class="subtitle">NJUPT Perimeter Monitoring</p>
-        </div>
+    <main class="main-content">
+        <section class="top-bar">
+            <div class="panel brand-panel">
+                <h1>Intrusion Detection</h1>
+                <p class="subtitle">NJUPT Perimeter Monitoring</p>
+            </div>
 
-        <div class="panel">
-            <h2>Data Source</h2>
-
-            <div class="data-source-box">
-                <label class="switch-row">
-                    <span>Mock</span>
-                    <label class="switch">
-                        <input type="checkbox" id="dataModeSwitch">
-                        <span class="slider"></span>
+            <div class="panel compact-panel">
+                <h2>Data Source</h2>
+                <div class="data-source-box">
+                    <label class="switch-row">
+                        <span>Mock</span>
+                        <label class="switch">
+                            <input type="checkbox" id="dataModeSwitch">
+                            <span class="slider"></span>
+                        </label>
+                        <span>Live API</span>
                     </label>
-                    <span>Live API</span>
-                </label>
 
-                <div class="source-status">
-                    Current source:
-                    <span id="modeValue" class="value badge neutral">Mock UI</span>
+                    <div class="source-status">
+                        Current source:
+                        <span id="modeValue" class="value badge neutral">Mock UI</span>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="panel">
-            <h2>System Status</h2>
-            <div class="status-grid">
-                <div class="status-item">
-                    <span class="label">Snapshot</span>
-                    <span id="snapshotValue" class="value">-</span>
-                </div>
-                <div class="status-item">
-                    <span class="label">Timestamp</span>
-                    <span id="timestampValue" class="value">-</span>
-                </div>
-                <div class="status-item">
-                    <span class="label">Threat</span>
-                    <span id="threatValue" class="value badge neutral">No Data</span>
-                </div>
-                <div class="status-item">
-                    <span class="label">Events</span>
-                    <span id="eventsCountValue" class="value">0</span>
+            <div class="panel compact-panel">
+                <h2>System Status</h2>
+                <div class="status-grid">
+                    <div class="status-item">
+                        <span class="label">Snapshot</span>
+                        <span id="snapshotValue" class="value">-</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Timestamp</span>
+                        <span id="timestampValue" class="value">-</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Threat</span>
+                        <span id="threatValue" class="value badge neutral">No Data</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Events</span>
+                        <span id="eventsCountValue" class="value">0</span>
+                    </div>
                 </div>
             </div>
-        </div>
+        </section>
 
-        <div class="panel">
-            <h2>Legend</h2>
-            <div class="legend">
-                <div class="legend-row">
-                    <span class="swatch fence"></span>
-                    <span>Fence</span>
+        <section class="map-and-feed">
+            <section class="map-card">
+                <div class="map-header">
+                    <div>
+                        <h2>Perimeter Map</h2>
+                        <p>1600 channels distributed clockwise around the campus perimeter</p>
+                    </div>
                 </div>
-                <div class="legend-row">
-                    <span class="swatch manipulation"></span>
-                    <span>Manipulation</span>
+                <div id="map"></div>
+            </section>
+
+            <aside class="panel live-feed-panel">
+                <h2>Activity Feed</h2>
+                <div id="liveFeedContainer" class="live-feed-container">
+                    <div class="feed-empty">No activity yet.</div>
                 </div>
-                <div class="legend-row">
-                    <span class="swatch normal"></span>
-                    <span>No threat</span>
-                </div>
-                <div class="legend-row">
-                    <span class="swatch perimeter"></span>
-                    <span>Perimeter baseline</span>
+            </aside>
+        </section>
+
+        <section class="bottom-panel">
+            <div class="panel events-panel">
+                <h2>Active Events</h2>
+                <div id="eventsContainer" class="events-container">
+                    <div class="empty-state">No active events.</div>
                 </div>
             </div>
-        </div>
 
-        <div class="panel">
-            <h2>Active Events</h2>
-            <div id="eventsContainer" class="events-container">
-                <div class="empty-state">No active events.</div>
+            <div class="panel side-info-panel">
+                <h2>Legend</h2>
+                <div class="legend">
+                    <div class="legend-row">
+                        <span class="swatch fence"></span>
+                        <span>Fence</span>
+                    </div>
+                    <div class="legend-row">
+                        <span class="swatch manipulation"></span>
+                        <span>Manipulation</span>
+                    </div>
+                    <div class="legend-row">
+                        <span class="swatch normal"></span>
+                        <span>No threat</span>
+                    </div>
+                    <div class="legend-row">
+                        <span class="swatch perimeter"></span>
+                        <span>Perimeter baseline</span>
+                    </div>
+                </div>
+
+                <div class="controls-panel">
+                    <button id="checkedBtn" class="checked-btn">Checked</button>
+                    <button id="reloadBtn" class="secondary-btn">Reload Current Source</button>
+                    <button id="openPerimeterToolBtn" class="secondary-btn">Open Perimeter Tool</button>
+                </div>
             </div>
-        </div>
-
-        <div class="panel controls-panel">
-            <button id="checkedBtn" class="checked-btn">Checked</button>
-            <button id="reloadBtn" class="secondary-btn">Reload Current Source</button>
-            <button id="openPerimeterToolBtn" class="secondary-btn">Open Perimeter Tool</button>
-        </div>
-    </aside>
-
-    <main class="map-section">
-        <div class="map-header">
-            <div>
-                <h2>Perimeter Map</h2>
-                <p>1600 channels distributed clockwise around the campus perimeter</p>
-            </div>
-        </div>
-
-        <div id="map"></div>
+        </section>
     </main>
 </div>
 

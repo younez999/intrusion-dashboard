@@ -1,7 +1,12 @@
 const CHANNEL_COUNT = 1600;
 const POLL_INTERVAL_MS = 4000;
 
-const MAP_CENTER = [32.11534, 118.92501];
+const ZOOM_IN_DURATION_MS = 1200;
+const HOLD_DURATION_MS = 900;
+const ZOOM_OUT_DURATION_MS = 1000;
+const BETWEEN_EVENTS_MS = 200;
+
+const MAP_CENTER = [32.1165, 118.9260];
 
 const DEMO_PERIMETER = [
     [32.119846, 118.919390],
@@ -18,51 +23,68 @@ const DEMO_PERIMETER = [
     [32.109197, 118.930671],
     [32.106788, 118.922989],
     [32.112825, 118.923166],
-    [32.114057, 118.922812],
+    [32.114057, 118.922812]
 ];
 
-const MOCK_PAYLOAD = {
-    status: "ok",
-    acknowledged: false,
-    data: {
-        snapshot_idx: 12,
-        timestamp: "2026-04-13T08:15:00Z",
-        n_events_detected: 3,
-        has_threat: true,
-        events: [
-            {
-                event_id: 0,
-                class: "fence",
-                class_idx: 1,
-                confidence: 0.91,
-                channel_start: 110,
-                channel_end: 220,
-                channel_width: 110,
-                is_threat: true
-            },
-            {
-                event_id: 1,
-                class: "manipulation",
-                class_idx: 2,
-                confidence: 0.87,
-                channel_start: 720,
-                channel_end: 810,
-                channel_width: 90,
-                is_threat: true
-            },
-            {
-                event_id: 2,
-                class: "fence",
-                class_idx: 1,
-                confidence: 0.94,
-                channel_start: 1300,
-                channel_end: 1385,
-                channel_width: 85,
-                is_threat: true
-            }
-        ]
+const MOCK_SCENARIOS = [
+    {
+        status: "ok",
+        acknowledged: false,
+        data: {
+            snapshot_idx: 12,
+            timestamp: "2026-04-13T08:15:00Z",
+            n_events_detected: 3,
+            has_threat: true,
+            events: [
+                { event_id: 0, class: "fence", class_idx: 1, confidence: 0.91, channel_start: 110, channel_end: 220, channel_width: 110, is_threat: true },
+                { event_id: 1, class: "manipulation", class_idx: 2, confidence: 0.87, channel_start: 720, channel_end: 810, channel_width: 90, is_threat: true },
+                { event_id: 2, class: "fence", class_idx: 1, confidence: 0.94, channel_start: 1300, channel_end: 1385, channel_width: 85, is_threat: true }
+            ]
+        }
+    },
+    {
+        status: "ok",
+        acknowledged: false,
+        data: {
+            snapshot_idx: 13,
+            timestamp: "2026-04-13T08:17:30Z",
+            n_events_detected: 2,
+            has_threat: true,
+            events: [
+                { event_id: 0, class: "fence", class_idx: 1, confidence: 0.89, channel_start: 260, channel_end: 340, channel_width: 80, is_threat: true },
+                { event_id: 1, class: "no_threat", class_idx: 0, confidence: 0.95, channel_start: 980, channel_end: 1020, channel_width: 40, is_threat: false }
+            ]
+        }
+    },
+    {
+        status: "ok",
+        acknowledged: false,
+        data: {
+            snapshot_idx: 14,
+            timestamp: "2026-04-13T08:20:10Z",
+            n_events_detected: 3,
+            has_threat: true,
+            events: [
+                { event_id: 0, class: "manipulation", class_idx: 2, confidence: 0.84, channel_start: 560, channel_end: 640, channel_width: 80, is_threat: true },
+                { event_id: 1, class: "fence", class_idx: 1, confidence: 0.92, channel_start: 1130, channel_end: 1215, channel_width: 85, is_threat: true },
+                { event_id: 2, class: "no_threat", class_idx: 0, confidence: 0.97, channel_start: 1450, channel_end: 1480, channel_width: 30, is_threat: false }
+            ]
+        }
+    },
+    {
+        status: "ok",
+        acknowledged: false,
+        data: {
+            snapshot_idx: 15,
+            timestamp: "2026-04-13T08:24:45Z",
+            n_events_detected: 1,
+            has_threat: false,
+            events: [
+                { event_id: 0, class: "no_threat", class_idx: 0, confidence: 0.98, channel_start: 400, channel_end: 430, channel_width: 30, is_threat: false }
+            ]
+        }
     }
-};
+];
 
 let map;
 let perimeterPolygon;
@@ -72,12 +94,19 @@ let perimeterChannelPoints = [];
 let currentPayload = null;
 let useBackend = false;
 let pollTimer = null;
-let alertZoomDone = false;
+let focusLoopRunning = false;
+let focusLoopToken = 0;
+let mockScenarioIndex = 0;
+let activityFeed = [];
 
 function getColorByClass(eventClass) {
     if (eventClass === "fence") return "#ef4444";
     if (eventClass === "manipulation") return "#f59e0b";
     return "#22c55e";
+}
+
+function wait(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function initMap() {
@@ -165,7 +194,7 @@ function addZoneLabels() {
 }
 
 function clearThreatLayers() {
-    activeThreatLayers.forEach(layer => map.removeLayer(layer));
+    activeThreatLayers.forEach(item => map.removeLayer(item.layer));
     activeThreatLayers = [];
 }
 
@@ -192,25 +221,66 @@ function buildChannelSegment(start, end) {
 
 function setAlertMode(isActive) {
     const banner = document.getElementById("alertBanner");
-
     document.body.classList.toggle("alert-mode", isActive);
     banner.classList.toggle("hidden", !isActive);
 
     if (!isActive) {
-        alertZoomDone = false;
+        stopThreatFocusLoop();
+        map.flyToBounds(perimeterPolygon.getBounds(), {
+            padding: [30, 30],
+            duration: 1.5
+        });
     }
 }
 
-function zoomToThreats(layers) {
-    if (!layers.length || alertZoomDone) return;
-
-    const group = L.featureGroup(layers);
-    map.fitBounds(group.getBounds(), {
-        padding: [50, 50],
-        maxZoom: 18
+function zoomToLayer(layer) {
+    map.flyToBounds(layer.getBounds(), {
+        padding: [140, 140],
+        maxZoom: 17,
+        duration: ZOOM_IN_DURATION_MS / 1000,
+        easeLinearity: 0.15
     });
+}
 
-    alertZoomDone = true;
+function zoomOutToPerimeter() {
+    map.flyToBounds(perimeterPolygon.getBounds(), {
+        padding: [60, 60],
+        maxZoom: 16,
+        duration: ZOOM_OUT_DURATION_MS / 1000,
+        easeLinearity: 0.1
+    });
+}
+
+async function startThreatFocusLoop() {
+    stopThreatFocusLoop();
+
+    const token = ++focusLoopToken;
+    const zoomableLayers = activeThreatLayers.filter(
+        item => item.event.class === "fence" || item.event.class === "manipulation"
+    );
+
+    if (!zoomableLayers.length) return;
+
+    focusLoopRunning = true;
+
+    while (focusLoopRunning && token === focusLoopToken) {
+        for (const item of zoomableLayers) {
+            if (!focusLoopRunning || token !== focusLoopToken) return;
+
+            zoomToLayer(item.layer);
+            await wait(ZOOM_IN_DURATION_MS + HOLD_DURATION_MS);
+
+            if (!focusLoopRunning || token !== focusLoopToken) return;
+
+            zoomOutToPerimeter();
+            await wait(ZOOM_OUT_DURATION_MS + BETWEEN_EVENTS_MS);
+        }
+    }
+}
+
+function stopThreatFocusLoop() {
+    focusLoopRunning = false;
+    focusLoopToken += 1;
 }
 
 function drawThreatSegments(events) {
@@ -236,10 +306,10 @@ function drawThreatSegments(events) {
       Confidence: ${(event.confidence * 100).toFixed(1)}%
     `);
 
-        activeThreatLayers.push(polyline);
+        activeThreatLayers.push({ layer: polyline, event });
     });
 
-    zoomToThreats(activeThreatLayers);
+    startThreatFocusLoop();
 }
 
 function setModeBadge() {
@@ -252,6 +322,39 @@ function setModeBadge() {
         modeValue.textContent = "Mock UI";
         modeValue.className = "value badge mock";
     }
+}
+
+function formatFeedMessage(event, timestamp) {
+    const kind = event.is_threat ? event.class.toUpperCase() : "NO THREAT";
+    return {
+        time: timestamp || new Date().toISOString(),
+        className: event.class || "no_threat",
+        text: `${kind} detected at channels ${event.channel_start}-${event.channel_end} with ${(event.confidence * 100).toFixed(1)}% confidence.`
+    };
+}
+
+function prependFeedItemsFromPayload(payload) {
+    if (!payload || !payload.events) return;
+
+    const newItems = payload.events.map(ev => formatFeedMessage(ev, payload.timestamp));
+    activityFeed = [...newItems.reverse(), ...activityFeed].slice(0, 12);
+    renderFeed();
+}
+
+function renderFeed() {
+    const container = document.getElementById("liveFeedContainer");
+
+    if (!activityFeed.length) {
+        container.innerHTML = `<div class="feed-empty">No activity yet.</div>`;
+        return;
+    }
+
+    container.innerHTML = activityFeed.map(item => `
+    <div class="feed-item ${item.className}">
+      <div class="feed-time">${item.time}</div>
+      <div class="feed-text">${item.text}</div>
+    </div>
+  `).join("");
 }
 
 function clearSidebarData() {
@@ -279,7 +382,9 @@ function updateSidebar(payloadWrapper) {
     }
 
     const payload = payloadWrapper.data;
-    const threatEvents = (payload.events || []).filter(e => e.is_threat);
+    const threatEvents = (payload.events || []).filter(
+        e => e.is_threat && (e.class === "fence" || e.class === "manipulation")
+    );
 
     document.getElementById("snapshotValue").textContent = payload.snapshot_idx ?? "-";
     document.getElementById("timestampValue").textContent = payload.timestamp ?? "-";
@@ -317,8 +422,11 @@ function updateSidebar(payloadWrapper) {
 }
 
 async function fetchMockData() {
-    currentPayload = structuredClone(MOCK_PAYLOAD);
-    updateSidebar(currentPayload);
+    const payload = structuredClone(MOCK_SCENARIOS[mockScenarioIndex]);
+    mockScenarioIndex = (mockScenarioIndex + 1) % MOCK_SCENARIOS.length;
+    currentPayload = payload;
+    prependFeedItemsFromPayload(payload.data);
+    updateSidebar(payload);
 }
 
 async function fetchLiveData() {
@@ -326,6 +434,9 @@ async function fetchLiveData() {
         const response = await fetch("/api/events/latest");
         const data = await response.json();
         currentPayload = data;
+        if (data && data.status === "ok" && data.data) {
+            prependFeedItemsFromPayload(data.data);
+        }
         updateSidebar(data);
     } catch (error) {
         console.error("Failed to load live data:", error);
@@ -405,6 +516,7 @@ window.addEventListener("DOMContentLoaded", async () => {
 
     initMap();
     wireButtons();
+    renderFeed();
 
     const switchEl = document.getElementById("dataModeSwitch");
     switchEl.checked = useBackend;
