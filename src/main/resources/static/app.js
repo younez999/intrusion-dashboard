@@ -1,10 +1,8 @@
 const CHANNEL_COUNT = 1600;
 const POLL_INTERVAL_MS = 4000;
 
-// Set to your campus center
 const MAP_CENTER = [32.11534, 118.92501];
 
-// Replace later with your true perimeter export
 const DEMO_PERIMETER = [
     [32.119846, 118.919390],
     [32.122692, 118.925006],
@@ -40,12 +38,7 @@ const MOCK_PAYLOAD = {
                 channel_start: 110,
                 channel_end: 220,
                 channel_width: 110,
-                is_threat: true,
-                mean_class_probs: {
-                    no_threat: 0.05,
-                    fence: 0.90,
-                    manipulation: 0.05
-                }
+                is_threat: true
             },
             {
                 event_id: 1,
@@ -55,12 +48,7 @@ const MOCK_PAYLOAD = {
                 channel_start: 720,
                 channel_end: 810,
                 channel_width: 90,
-                is_threat: true,
-                mean_class_probs: {
-                    no_threat: 0.08,
-                    fence: 0.07,
-                    manipulation: 0.85
-                }
+                is_threat: true
             },
             {
                 event_id: 2,
@@ -70,12 +58,7 @@ const MOCK_PAYLOAD = {
                 channel_start: 1300,
                 channel_end: 1385,
                 channel_width: 85,
-                is_threat: true,
-                mean_class_probs: {
-                    no_threat: 0.03,
-                    fence: 0.92,
-                    manipulation: 0.05
-                }
+                is_threat: true
             }
         ]
     }
@@ -89,6 +72,7 @@ let perimeterChannelPoints = [];
 let currentPayload = null;
 let useBackend = false;
 let pollTimer = null;
+let alertZoomDone = false;
 
 function getColorByClass(eventClass) {
     if (eventClass === "fence") return "#ef4444";
@@ -206,6 +190,29 @@ function buildChannelSegment(start, end) {
     return points;
 }
 
+function setAlertMode(isActive) {
+    const banner = document.getElementById("alertBanner");
+
+    document.body.classList.toggle("alert-mode", isActive);
+    banner.classList.toggle("hidden", !isActive);
+
+    if (!isActive) {
+        alertZoomDone = false;
+    }
+}
+
+function zoomToThreats(layers) {
+    if (!layers.length || alertZoomDone) return;
+
+    const group = L.featureGroup(layers);
+    map.fitBounds(group.getBounds(), {
+        padding: [50, 50],
+        maxZoom: 18
+    });
+
+    alertZoomDone = true;
+}
+
 function drawThreatSegments(events) {
     clearThreatLayers();
 
@@ -218,7 +225,8 @@ function drawThreatSegments(events) {
         const polyline = L.polyline(points, {
             color,
             weight: 8,
-            opacity: 0.95
+            opacity: 0.95,
+            className: "pulse-threat"
         }).addTo(map);
 
         polyline.bindPopup(`
@@ -230,6 +238,8 @@ function drawThreatSegments(events) {
 
         activeThreatLayers.push(polyline);
     });
+
+    zoomToThreats(activeThreatLayers);
 }
 
 function setModeBadge() {
@@ -257,6 +267,7 @@ function clearSidebarData() {
         `<div class="empty-state">No active events.</div>`;
 
     clearThreatLayers();
+    setAlertMode(false);
 }
 
 function updateSidebar(payloadWrapper) {
@@ -278,9 +289,11 @@ function updateSidebar(payloadWrapper) {
     if (payload.has_threat && threatEvents.length > 0) {
         threatValue.textContent = "Threat Active";
         threatValue.className = "value badge danger";
+        setAlertMode(true);
     } else {
         threatValue.textContent = "No Threat";
         threatValue.className = "value badge safe";
+        setAlertMode(false);
     }
 
     const eventsContainer = document.getElementById("eventsContainer");
@@ -364,6 +377,8 @@ function handleModeSwitch() {
     const switchEl = document.getElementById("dataModeSwitch");
     useBackend = switchEl.checked;
 
+    localStorage.setItem("intrusionDataMode", useBackend ? "live" : "mock");
+
     setModeBadge();
     clearSidebarData();
     fetchCurrentSource();
@@ -385,8 +400,15 @@ function wireButtons() {
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
+    const savedMode = localStorage.getItem("intrusionDataMode");
+    useBackend = savedMode === "live";
+
     initMap();
     wireButtons();
+
+    const switchEl = document.getElementById("dataModeSwitch");
+    switchEl.checked = useBackend;
+
     setModeBadge();
     await fetchCurrentSource();
     startPolling();

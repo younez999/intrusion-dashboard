@@ -7,6 +7,13 @@ body {
     font-family: Inter, Arial, sans-serif;
     background: #0f172a;
     color: #e5e7eb;
+    transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
+body.alert-mode {
+    background:
+            radial-gradient(circle at top, rgba(127, 29, 29, 0.45), transparent 35%),
+            #1a0f12;
 }
 
 .app-shell {
@@ -15,11 +22,41 @@ body {
     min-height: 100vh;
 }
 
+.alert-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 2000;
+    background: linear-gradient(90deg, #7f1d1d, #dc2626, #7f1d1d);
+    color: white;
+    text-align: center;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    padding: 14px 20px;
+    box-shadow: 0 4px 20px rgba(239, 68, 68, 0.5);
+    animation: bannerPulse 1.2s infinite;
+}
+
+.hidden {
+    display: none;
+}
+
+@keyframes bannerPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.72; }
+}
+
 .sidebar {
     background: #111827;
     border-right: 1px solid rgba(255,255,255,0.08);
     padding: 18px;
     overflow-y: auto;
+    transition: background 0.3s ease;
+}
+
+body.alert-mode .sidebar {
+    background: #1b1518;
 }
 
 .panel {
@@ -28,6 +65,12 @@ body {
     border-radius: 16px;
     padding: 16px;
     margin-bottom: 16px;
+    transition: transform 0.2s ease, background 0.3s ease, border-color 0.3s ease;
+}
+
+body.alert-mode .panel {
+    background: #26181c;
+    border-color: rgba(239, 68, 68, 0.28);
 }
 
 .brand-panel h1 {
@@ -206,10 +249,12 @@ input:checked + .slider:before {
 
 .event-card.fence {
     border-left: 5px solid #ef4444;
+    box-shadow: 0 0 18px rgba(239, 68, 68, 0.16);
 }
 
 .event-card.manipulation {
     border-left: 5px solid #f59e0b;
+    box-shadow: 0 0 18px rgba(245, 158, 11, 0.16);
 }
 
 .event-card.no_threat {
@@ -261,12 +306,22 @@ input:checked + .slider:before {
     display: flex;
     flex-direction: column;
     min-width: 0;
+    transition: box-shadow 0.3s ease;
+}
+
+body.alert-mode .map-section {
+    box-shadow: inset 0 0 0 3px rgba(239, 68, 68, 0.55);
 }
 
 .map-header {
     padding: 18px 22px;
     border-bottom: 1px solid rgba(255,255,255,0.08);
     background: #0b1220;
+    transition: background 0.3s ease;
+}
+
+body.alert-mode .map-header {
+    background: #2a1318;
 }
 
 .map-header h2 {
@@ -283,6 +338,12 @@ input:checked + .slider:before {
     width: 100%;
 }
 
+body.alert-mode #map {
+    box-shadow:
+            inset 0 0 30px rgba(239, 68, 68, 0.15),
+            0 0 30px rgba(239, 68, 68, 0.18);
+}
+
 .zone-label {
     background: rgba(15, 23, 42, 0.9);
     color: white;
@@ -291,6 +352,19 @@ input:checked + .slider:before {
     border-radius: 8px;
     font-size: 12px;
     font-weight: 700;
+}
+
+.pulse-threat {
+    animation: threatPulse 1.2s infinite;
+}
+
+@keyframes threatPulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.45;
+    }
 }
 
 @media (max-width: 1100px) {
